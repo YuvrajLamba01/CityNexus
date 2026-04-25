@@ -26,22 +26,31 @@ from citynexus.agents import (
     TrafficAgent,
 )
 
-# Training pipeline
+# Training pipeline + LLM-planner glue
 from citynexus.training import (
+    MODES,
     CallablePolicy,
     ComparisonResult,
     EvalConfig,
     EvalResult,
     Evaluator,
     HeuristicPolicy,
+    LLMPlannerPolicy,
     MetricsLogger,
     Policy,
     PolicyBundle,
+    PromptSample,
     Trajectory,
     TrainingConfig,
     TrainingPipeline,
     TrainingSummary,
     Transition,
+    build_dataset,
+    expert_distribution,
+    expert_mode,
+    grpo_reward,
+    obs_to_prompt,
+    run_llm_episode,
 )
 
 # Persistent memory
@@ -138,4 +147,8 @@ __all__ = [
     "Policy", "HeuristicPolicy", "CallablePolicy", "PolicyBundle",
     "Transition", "Trajectory",
     "MetricsLogger",
+    # LLM planner (GRPO target + verifiable reward + inference)
+    "MODES", "expert_mode", "obs_to_prompt", "grpo_reward",
+    "PromptSample", "build_dataset", "expert_distribution",
+    "LLMPlannerPolicy", "run_llm_episode",
 ]

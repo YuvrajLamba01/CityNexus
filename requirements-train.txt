@@ -1,0 +1,23 @@
+# Training-only stack for the GRPO Planner notebook (Section 6).
+# Sections 1-5 of the notebook only need `requirements.txt`.
+#
+# Install on a Colab T4 GPU runtime BEFORE running Section 6:
+#     pip install -r requirements-train.txt
+#
+# These versions are the ones the notebook was developed against.
+# Bump them deliberately — TRL's GRPOTrainer API changed between 0.7 and 0.10.
+
+# Core RL stack
+trl>=0.10.0,<0.13
+peft>=0.10.0,<0.14
+accelerate>=0.27.0,<1.1
+bitsandbytes>=0.43.0
+datasets>=2.18.0,<3.1
+
+# Unsloth — Colab branch (GPU only). Install separately on Colab via:
+#     pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
+# Pinning a Git URL here would tie us to a specific commit and break Colab updates.
+
+# Plotting / data wrangling
+matplotlib>=3.7
+pandas>=2.0

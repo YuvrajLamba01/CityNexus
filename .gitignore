@@ -1,0 +1,53 @@
+# --- Python --------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Virtual envs --------------------------------------------------------
+.venv/
+venv/
+env/
+.python-version
+
+# --- IDE / OS ------------------------------------------------------------
+.idea/
+.vscode/
+.cursor/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Notebooks -----------------------------------------------------------
+.ipynb_checkpoints/
+
+# --- Submission artifacts ------------------------------------------------
+# Training run outputs are *not* committed by default — only the final
+# README-embedded plots and the curated jsonl should be checked in. Use
+# `git add -f runs/training_curves.png` etc. when you're ready to publish.
+runs/
+!runs/README.md
+!runs/training_curves.png
+!runs/baseline_vs_trained.png
+!runs/grpo_reward.png
+!runs/llm_vs_random.png
+!runs/training.jsonl
+
+# --- Model artifacts -----------------------------------------------------
+*.pt
+*.bin
+*.safetensors
+*.ckpt
+*.gguf
+
+# --- Local config --------------------------------------------------------
+.env
+.env.*
+!.env.example
