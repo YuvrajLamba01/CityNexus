@@ -30,9 +30,11 @@ Thumbs.db
 
 # --- Submission artifacts ------------------------------------------------
 # Training run outputs are *not* committed by default — only the final
-# README-embedded plots and the curated jsonl should be checked in. Use
-# `git add -f runs/training_curves.png` etc. when you're ready to publish.
-runs/
+# README-embedded plots and the curated jsonl should be checked in. The
+# `runs/*` (not `runs/`) pattern is intentional: git cannot un-ignore files
+# inside an ignored directory, so listing the directory contents lets the
+# `!runs/<file>` negations actually take effect.
+runs/*
 !runs/README.md
 !runs/training_curves.png
 !runs/baseline_vs_trained.png
