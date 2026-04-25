@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="CITYNEXUS — multi-agent urban simulation running entirely in your browser." />
+  <title>CITYNEXUS — Multi-Agent Urban Simulation</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+
+    <!-- ============== HERO ============== -->
+    <header class="hero">
+      <div class="hero-text">
+        <h1 class="hero-title">CITYNEXUS</h1>
+        <p class="hero-sub">
+          Multi-agent urban simulation with adversarial scenarios, persistent memory,
+          and process-aware rewards — running entirely in your browser.
+        </p>
+        <div class="hero-badges">
+          <span class="badge">5 Agents</span>
+          <span class="badge">Adversarial Curriculum</span>
+          <span class="badge">3-Layer Verification</span>
+          <span class="badge">Process-Aware Rewards</span>
+          <span class="badge">Persistent Memory</span>
+        </div>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="hero-stat-label">City score</div>
+          <div class="hero-stat-value" id="city-score">—</div>
+          <div class="hero-stat-sub" id="city-score-sub">composite [0..1]</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-label">Tick</div>
+          <div class="hero-stat-value" id="tick-counter">0</div>
+          <div class="hero-stat-sub" id="tick-sub">/ 200</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-label">Episode</div>
+          <div class="hero-stat-value" id="episode-counter">1</div>
+          <div class="hero-stat-sub" id="diff-sub">d=0.30</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ============== MAIN GRID: canvas + controls ============== -->
+    <main class="main-grid">
+      <section class="canvas-panel">
+        <div class="panel-header">
+          <h2>Live city</h2>
+          <div class="info-pills">
+            <span class="info-pill" id="weather-pill">
+              <span class="pill-dot"></span>
+              <span class="pill-text">clear</span>
+            </span>
+            <span class="info-pill" id="hour-pill">00:00</span>
+            <span class="info-pill warn"><strong id="acc-pill">0</strong> accidents</span>
+            <span class="info-pill"><strong id="inc-pill">0</strong> incidents</span>
+          </div>
+        </div>
+
+        <div class="canvas-wrap">
+          <canvas id="city-canvas" width="600" height="600"></canvas>
+          <div class="canvas-overlay" id="canvas-overlay"></div>
+        </div>
+
+        <p class="hint">
+          Click any cell to inspect it. Hover units for details. The red overlay
+          on roads shows traffic density; deeper red means closer to gridlock.
+        </p>
+      </section>
+
+      <aside class="controls-panel">
+        <h2>Controls</h2>
+
+        <div class="btn-row">
+          <button id="reset-btn" class="btn primary"><span>Reset Simulation</span></button>
+        </div>
+
+        <div class="btn-row split">
+          <button id="step-btn" class="btn">Step</button>
+          <button id="play-btn" class="btn primary">Play</button>
+          <button id="pause-btn" class="btn danger">Pause</button>
+        </div>
+
+        <label class="control">
+          <span class="control-label">
+            Tick interval
+            <span class="control-value" id="speed-value">400 ms</span>
+          </span>
+          <input type="range" id="speed-slider" min="50" max="1500" value="400" step="50" />
+          <span class="control-hint">Lower = faster auto-play.</span>
+        </label>
+
+        <h3>Scenario</h3>
+
+        <label class="control">
+          <span class="control-label">
+            Difficulty
+            <span class="control-value" id="difficulty-value">0.30</span>
+          </span>
+          <input type="range" id="difficulty-slider" min="0" max="100" value="30" step="5" />
+          <span class="control-hint">Drives shock count + severity from the adversarial generator.</span>
+        </label>
+
+        <label class="control">
+          <span class="control-label">Episode length (ticks)</span>
+          <input type="number" id="length-input" value="200" min="50" max="500" step="10" />
+        </label>
+
+        <label class="control">
+          <span class="control-label">Random seed</span>
+          <input type="number" id="seed-input" value="42" />
+        </label>
+
+        <h3>Options</h3>
+
+        <label class="checkbox">
+          <input type="checkbox" id="memory-cb" checked />
+          <span>
+            <strong>Persistent memory</strong>
+            <em>(localStorage — survives reload)</em>
+          </span>
+        </label>
+
+        <label class="checkbox">
+          <input type="checkbox" id="weather-fx-cb" checked />
+          <span>
+            <strong>Weather effects</strong>
+            <em>(rain particles, storm overlay)</em>
+          </span>
+        </label>
+
+        <label class="checkbox">
+          <input type="checkbox" id="trails-cb" checked />
+          <span>
+            <strong>Unit trails</strong>
+            <em>(fading path behind units)</em>
+          </span>
+        </label>
+
+        <button id="clear-memory-btn" class="btn ghost">Clear stored memory</button>
+      </aside>
+    </main>
+
+    <!-- ============== LEGEND (full-width, prominent) ============== -->
+    <section class="legend-bar">
+      <h3 class="legend-title">Legend</h3>
+      <div class="legend">
+        <!-- Zones: filled squares -->
+        <span class="chip"><span class="sw square" style="background:#3a3a52"></span>Road</span>
+        <span class="chip"><span class="sw square" style="background:#1e3a8a"></span>Residential</span>
+        <span class="chip"><span class="sw square" style="background:#0f766e"></span>Commercial</span>
+        <span class="chip"><span class="sw square" style="background:#9d174d"></span>Hospital</span>
+        <span class="chip"><span class="sw square" style="background:#92400e"></span>Industrial</span>
+        <!-- Dynamic markers — shape matches canvas exactly -->
+        <span class="chip"><span class="sw cross"    style="color:#ff3b6b"></span>Accident</span>
+        <span class="chip"><span class="sw rblock"   style="background:#ffb020"></span>Roadblock</span>
+        <span class="chip"><span class="sw circle"   style="background:#10b981"></span>Ambulance</span>
+        <span class="chip"><span class="sw diamond"  style="background:#3b82f6"></span>Police</span>
+        <span class="chip"><span class="sw triangle" style="background:#f59e0b"></span>Delivery van</span>
+        <span class="chip"><span class="sw hex"      style="background:#a78bfa"></span>Incident</span>
+      </div>
+    </section>
+
+    <!-- ============== AGENT CARDS WITH SPARKLINES ============== -->
+    <section class="agent-cards">
+      <div class="agent-card" data-role="delivery">
+        <div class="card-head">
+          <span class="role-dot" style="background:#f59e0b"></span>
+          <span class="role-name">Delivery</span>
+          <span class="role-reward" id="reward-delivery">+0.0</span>
+        </div>
+        <canvas class="sparkline" data-key="delivery" width="240" height="48"></canvas>
+        <div class="role-stats" id="stats-delivery">routing packages</div>
+      </div>
+
+      <div class="agent-card" data-role="traffic">
+        <div class="card-head">
+          <span class="role-dot" style="background:#3b82f6"></span>
+          <span class="role-name">Traffic</span>
+          <span class="role-reward" id="reward-traffic">+0.0</span>
+        </div>
+        <canvas class="sparkline" data-key="traffic" width="240" height="48"></canvas>
+        <div class="role-stats" id="stats-traffic">managing congestion</div>
+      </div>
+
+      <div class="agent-card" data-role="emergency">
+        <div class="card-head">
+          <span class="role-dot" style="background:#10b981"></span>
+          <span class="role-name">Emergency</span>
+          <span class="role-reward" id="reward-emergency">+0.0</span>
+        </div>
+        <canvas class="sparkline" data-key="emergency" width="240" height="48"></canvas>
+        <div class="role-stats" id="stats-emergency">dispatching ambulances</div>
+      </div>
+
+      <div class="agent-card" data-role="police">
+        <div class="card-head">
+          <span class="role-dot" style="background:#a78bfa"></span>
+          <span class="role-name">Police</span>
+          <span class="role-reward" id="reward-police">+0.0</span>
+        </div>
+        <canvas class="sparkline" data-key="police" width="240" height="48"></canvas>
+        <div class="role-stats" id="stats-police">resolving incidents</div>
+      </div>
+
+      <div class="agent-card" data-role="planner">
+        <div class="card-head">
+          <span class="role-dot" style="background:#21d4fd"></span>
+          <span class="role-name">Planner</span>
+          <span class="role-reward" id="reward-planner">+0.0</span>
+        </div>
+        <canvas class="sparkline" data-key="planner" width="240" height="48"></canvas>
+        <div class="role-stats" id="stats-planner">setting priorities</div>
+      </div>
+    </section>
+
+    <!-- ============== BIG CHARTS ============== -->
+    <section class="charts-row">
+      <div class="chart-panel">
+        <div class="panel-header">
+          <h3>City score (composite + components)</h3>
+          <span class="hint-inline">delivery health · safety · mobility · coordination</span>
+        </div>
+        <canvas id="city-chart" width="800" height="220"></canvas>
+      </div>
+
+      <div class="chart-panel">
+        <div class="panel-header">
+          <h3>Per-agent cumulative reward</h3>
+          <span class="hint-inline">divergence reveals which agents are pulling weight</span>
+        </div>
+        <canvas id="reward-chart" width="800" height="220"></canvas>
+      </div>
+    </section>
+
+    <!-- ============== STATS GRID ============== -->
+    <section class="stats-grid">
+      <div class="stat-card good">
+        <div class="stat-label">Delivered</div>
+        <div class="stat-value" id="stat-delivered">0</div>
+        <div class="stat-sub"><span id="stat-pending">0</span> pending · <span id="stat-failed">0</span> failed</div>
+      </div>
+      <div class="stat-card bad">
+        <div class="stat-label">Active accidents</div>
+        <div class="stat-value" id="stat-accidents">0</div>
+        <div class="stat-sub"><span id="stat-incidents">0</span> incidents</div>
+      </div>
+      <div class="stat-card warn">
+        <div class="stat-label">Peak congestion</div>
+        <div class="stat-value" id="stat-congestion">0%</div>
+        <div class="stat-sub">% of road cells &gt; 0.7 density</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Memory records</div>
+        <div class="stat-value" id="stat-memory">0</div>
+        <div class="stat-sub">high-risk zones learned</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Shocks fired</div>
+        <div class="stat-value" id="stat-shocks">0</div>
+        <div class="stat-sub">/ <span id="stat-shocks-total">0</span> scheduled</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total reward</div>
+        <div class="stat-value" id="stat-reward">+0.0</div>
+        <div class="stat-sub">summed across all roles</div>
+      </div>
+    </section>
+
+    <!-- ============== LOGS ============== -->
+    <section class="logs-row">
+      <div class="log-panel">
+        <h3>Agent decisions</h3>
+        <div class="log-list" id="decisions-log"></div>
+      </div>
+      <div class="log-panel">
+        <h3>Inter-agent messages</h3>
+        <div class="log-list" id="messages-log"></div>
+      </div>
+      <div class="log-panel">
+        <h3>High-risk zones <span class="hint-inline">(memory)</span></h3>
+        <div class="log-list" id="zones-log"></div>
+      </div>
+    </section>
+
+    <!-- ============== EXPLANATION ============== -->
+    <section class="explainer">
+      <h2>How CITYNEXUS works</h2>
+
+      <p>
+        CITYNEXUS is a 20×20 grid city. Every tick (which represents one in-game hour)
+        five autonomous agents observe a partial slice of the world, decide what to do,
+        and act. Their actions reshape the city; their effects feed back into observations.
+      </p>
+
+      <div class="explainer-grid">
+        <div class="explainer-card">
+          <h4>The five agents</h4>
+          <ul>
+            <li><strong>Delivery</strong> sees roads near pending package routes; runs BFS through visible roads avoiding blocked cells.</li>
+            <li><strong>Traffic</strong> sees only intersections; broadcasts advisories when too many are congested.</li>
+            <li><strong>Emergency</strong> sees discs around active accidents; dispatches the nearest idle ambulance to the highest-severity scene.</li>
+            <li><strong>Police</strong> sees discs around incidents and accident hazards; dispatches cars and cordons severe protests.</li>
+            <li><strong>Planner</strong> sees only aggregate metrics; raises per-role priorities when its summary view shows a load spike.</li>
+          </ul>
+        </div>
+
+        <div class="explainer-card">
+          <h4>Adversarial scenarios</h4>
+          <p>
+            Each episode gets a scenario from the curriculum-driven generator. As difficulty
+            rises, more shocks fire on a schedule:
+          </p>
+          <ul>
+            <li><strong>Traffic spike</strong> — boosts density inside a disc.</li>
+            <li><strong>Emergency cluster</strong> — drops 2–6 simultaneous accidents.</li>
+            <li><strong>Blocked routes</strong> — places a batch of timed roadblocks.</li>
+            <li><strong>Weather storm</strong> — forces stormy weather for N ticks (raises accident rate, reduces road throughput).</li>
+          </ul>
+        </div>
+
+        <div class="explainer-card">
+          <h4>Process-aware rewards</h4>
+          <p>
+            Pure outcome rewards are too sparse to train on, so each agent gets a dense
+            per-tick signal alongside terminal rewards:
+          </p>
+          <ul>
+            <li>Per-cell <strong>movement progress</strong> for any unit closing on its target.</li>
+            <li><strong>Dispatch intent</strong> — credit for picking a high-severity target before arrival.</li>
+            <li><strong>Planner anticipation</strong> — credit for elevating a priority that matches observed load.</li>
+            <li>Plus penalties for delays, collisions, and idle units when work is queued.</li>
+          </ul>
+        </div>
+
+        <div class="explainer-card">
+          <h4>Persistent memory</h4>
+          <p>
+            High-risk zones (recurring accident or congestion hotspots), past failures,
+            and successful strategies persist in <code>localStorage</code>. The Delivery
+            and Planner agents query memory each tick to anticipate problems they've seen
+            before. Toggle "Persistent memory" off to see the difference.
+          </p>
+        </div>
+
+        <div class="explainer-card">
+          <h4>How rewards are gated</h4>
+          <p>
+            A 3-layer verifier inspects each tick:
+          </p>
+          <ol>
+            <li><strong>Programmatic</strong> — are the actions well-formed? (paths on roads, valid unit IDs, bounded coords)</li>
+            <li><strong>System state</strong> — did the claimed effect actually happen? (congestion really dropped, accidents really cleared)</li>
+            <li><strong>Semantic</strong> — were the priorities coherent? Did the highest-severity scenes get dispatched first?</li>
+          </ol>
+          <p>
+            Failures attribute to the responsible role, and that role's reward is zeroed
+            for the tick (the others keep theirs).
+          </p>
+        </div>
+
+        <div class="explainer-card">
+          <h4>Reading the live city</h4>
+          <ul>
+            <li>Zone color = land use; <strong>red overlay</strong> on roads = traffic density.</li>
+            <li>Pulsing pink <strong>X</strong> = accident, sized by severity.</li>
+            <li>Amber square = roadblock (timed).</li>
+            <li>Colored disks = mobile units; they move smoothly between ticks.</li>
+            <li>Purple hexagon = police-domain incident.</li>
+            <li>If weather effects are on: rain particles, storm tint + occasional flash.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="explainer-callout">
+        <strong>Why this exists.</strong> CITYNEXUS was built for the OpenEnv hackathon as
+        an end-to-end multi-agent training environment. The full Python implementation
+        includes RL trajectory collection, baseline-vs-trained evaluation, an Unsloth/TRL-ready
+        training pipeline, and OpenEnv compliance. This page is a faithful in-browser port of
+        the simulation core — engine, agents, adversary, rewards, memory — so you can play
+        with the dynamics without installing anything.
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div>CITYNEXUS · OpenEnv Hackathon · everything runs in your browser</div>
+      <div class="footer-meta">
+        <span id="footer-fps">— fps</span>
+        <span class="dot-sep">·</span>
+        <span id="footer-storage">storage: ready</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ============== SCRIPTS ============== -->
+  <script src="js/sim.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
