@@ -1,19 +1,56 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "citynexus"
 version = "0.1.0"
-description = "Self-evolving multi-agent urban simulation environment"
+description = "Self-evolving multi-agent urban simulation environment for the OpenEnv 2026 hackathon."
+readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
+authors = [{ name = "Yuvraj Lamba" }]
+keywords = ["openenv", "reinforcement-learning", "multi-agent", "rl", "trl", "unsloth", "grpo"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "numpy>=1.24",
-    "openenv-core>=0.2.0",
+    "openenv-core[core]>=0.2.2",
     "fastapi",
     "uvicorn[standard]",
     "pydantic>=2.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "matplotlib>=3.7.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/YuvrajLamba01/CityNexus"
+Repository = "https://github.com/YuvrajLamba01/CityNexus"
+Issues = "https://github.com/YuvrajLamba01/CityNexus/issues"
+
+[project.scripts]
+# Server entry point — enables running via:
+#   uv run --project . server
+#   citynexus-server
+#   python -m server.app
+server = "server.app:main"
+citynexus-server = "server.app:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
+

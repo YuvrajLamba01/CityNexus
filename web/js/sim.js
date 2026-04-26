@@ -441,20 +441,38 @@
     return actions;
   }
 
+  // Mirror of server/environment.py::_MODE_PRIORITIES — when a forced mode
+  // is supplied (by playback), the planner emits exactly these priorities
+  // instead of running its heuristic. This is what lets the in-browser sim
+  // faithfully replay the recorded LLM policy.
+  const MODE_PRIORITIES = {
+    normal:          { delivery: 1.0, traffic: 1.0, emergency: 1.0, police: 1.0, planner: 1.0 },
+    emergency_focus: { delivery: 0.7, traffic: 1.2, emergency: 2.0, police: 1.5, planner: 1.0 },
+    delivery_focus:  { delivery: 2.0, traffic: 1.5, emergency: 0.8, police: 0.8, planner: 1.0 },
+    defensive:       { delivery: 0.7, traffic: 1.5, emergency: 1.2, police: 1.2, planner: 2.0 },
+  };
+
   function plannerAgent(state) {
     const actions = [];
-    const target = { delivery: 1, traffic: 1, emergency: 1, police: 1, planner: 1 };
-    if (state.accidents.length >= 3) target.emergency = 2.0;
-    if (state.incidents.length >= 2) target.police = 1.5;
-    const cong = computeCongestion(state.traffic, state.world);
-    if (cong > 0.5) target.traffic = 1.5;
-    const openD = state.deliveries.filter(d => d.status === 'pending' || d.status === 'en_route').length;
-    if (openD >= 5) target.delivery = 1.5;
+    let target;
 
-    // Memory anticipation: recurring failure modes lead to pre-emptive raises.
-    if (state.useMemory && state.memory && state.memory.failureCounts) {
-      if ((state.memory.failureCounts.emergency || 0) >= 3) target.emergency = Math.max(target.emergency, 1.5);
-      if ((state.memory.failureCounts.traffic || 0) >= 3)   target.traffic   = Math.max(target.traffic, 1.5);
+    // If the playback layer has pinned a mode for this tick, honor it.
+    if (state.forcedMode && MODE_PRIORITIES[state.forcedMode]) {
+      target = Object.assign({}, MODE_PRIORITIES[state.forcedMode]);
+    } else {
+      target = { delivery: 1, traffic: 1, emergency: 1, police: 1, planner: 1 };
+      if (state.accidents.length >= 3) target.emergency = 2.0;
+      if (state.incidents.length >= 2) target.police = 1.5;
+      const cong = computeCongestion(state.traffic, state.world);
+      if (cong > 0.5) target.traffic = 1.5;
+      const openD = state.deliveries.filter(d => d.status === 'pending' || d.status === 'en_route').length;
+      if (openD >= 5) target.delivery = 1.5;
+
+      // Memory anticipation: recurring failure modes lead to pre-emptive raises.
+      if (state.useMemory && state.memory && state.memory.failureCounts) {
+        if ((state.memory.failureCounts.emergency || 0) >= 3) target.emergency = Math.max(target.emergency, 1.5);
+        if ((state.memory.failureCounts.traffic || 0) >= 3)   target.traffic   = Math.max(target.traffic, 1.5);
+      }
     }
 
     for (const role of ['delivery', 'traffic', 'emergency', 'police']) {
@@ -1122,6 +1140,8 @@
     loadMemory,
     clearMemory,
     computeCongestion,
+    MODES: ['normal', 'emergency_focus', 'delivery_focus', 'defensive'],
+    MODE_PRIORITIES,
     // utilities the renderer needs
     timeOfDayDemand,
     WEATHER_ACC_RATE,

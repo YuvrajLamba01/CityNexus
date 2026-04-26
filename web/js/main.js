@@ -384,6 +384,37 @@
     }
   });
 
+  // ---------- public API for the playback module ----------
+  window.CityNexusApp = {
+    // Pause auto-play and reset the sim with a specific seed/length, return state.
+    setupPlayback({ seed, length }) {
+      playing = false;
+      $('seed-input').value      = String(seed);
+      $('length-input').value    = String(length);
+      state = sim.newState({
+        seed,
+        difficulty: getDifficulty(),
+        episodeLen: length,
+        useMemory,
+      });
+      selectedCell = null;
+      els.shocksTotal.textContent = state.scenario.shocks.length;
+      refreshAll();
+      return state;
+    },
+    // Force the next sim tick to use the supplied mode, then refresh DOM.
+    stepWithMode(mode) {
+      state.forcedMode = mode;
+      sim.step(state);
+      state.forcedMode = null;
+      refreshAll();
+      return state;
+    },
+    getState() { return state; },
+    isPlaying()    { return playing; },
+    setPlaying(v)  { playing = !!v; if (playing) lastTickAt = performance.now(); },
+  };
+
   // ---------- go ----------
   init();
 })();

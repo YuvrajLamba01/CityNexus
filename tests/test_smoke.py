@@ -2,7 +2,7 @@
 
 Run with: ``pytest -q``
 
-Each test is intentionally fast (<2s) and covers a different layer so a judge
+Each test is intentionally fast (<2s) and covers a different layer so a reviewer
 can verify the whole stack is wired correctly without a GPU.
 
 Layers exercised
@@ -196,6 +196,23 @@ def test_grpo_reward_ranking_anti_gaming():
     assert all(m in MODES for m in MODES)
 
 
+def test_grpo_reward_accepts_trl_kwargs_path():
+    """trl.GRPOTrainer passes dataset columns by keyword. Make sure the reward
+    function survives that call shape (prompts/completions/expert as kwargs +
+    arbitrary extra TRL columns) without crashing or silently scoring zero."""
+    from citynexus.training.llm_planner import grpo_reward
+
+    r = grpo_reward(
+        prompts=["p1", "p2"],
+        completions=["normal", "garbage"],
+        expert=["normal", "defensive"],
+        completion_ids=[[0, 1], [2, 3]],
+        trainer_state={"step": 5},
+    )
+    assert len(r) == 2
+    assert r[0] > r[1]
+
+
 def test_expert_mode_priority_order():
     from citynexus.training.llm_planner import expert_mode
 
@@ -244,3 +261,53 @@ def test_build_dataset_uses_openenv_wrapper():
         assert s.expert in MODES
         assert "Respond with ONLY the mode name" in s.prompt
     assert sum(dist.values()) == len(samples)
+
+
+# ---------------------------------------------------------------------------
+# 6. In-browser playback rollouts (schema regression test)
+# ---------------------------------------------------------------------------
+
+def test_llm_rollouts_schema_and_mirror():
+    """The static demo's Trained Model Playback panel is driven by
+    `runs/llm_rollouts.json` with a mirror at `web/data/llm_rollouts.json`.
+    This test guards the schema: a regression here would silently break the
+    playback panel on the deployed Hugging Face Space.
+    """
+    from citynexus.training.llm_planner import MODES
+
+    repo_root = Path(__file__).resolve().parent.parent
+    canonical = repo_root / "runs" / "llm_rollouts.json"
+    mirror    = repo_root / "web" / "data" / "llm_rollouts.json"
+
+    assert canonical.exists(), "runs/llm_rollouts.json missing — regenerate via gen_rollouts.py"
+    assert mirror.exists(),    "web/data/llm_rollouts.json missing — gen_rollouts.py writes both"
+
+    canonical_text = canonical.read_text(encoding="utf-8")
+    mirror_text    = mirror.read_text(encoding="utf-8")
+    assert canonical_text == mirror_text, "rollouts JSON mirror has drifted from the canonical copy"
+
+    payload = json.loads(canonical_text)
+    assert payload["schema_version"] == 1
+    assert isinstance(payload["max_ticks"], int) and payload["max_ticks"] > 0
+    assert isinstance(payload["seeds"], list) and len(payload["seeds"]) >= 1
+    assert set(payload["modes"]) == set(MODES), "rollouts modes diverged from MODES tuple"
+
+    expected_tracks = {"random_baseline", "heuristic_expert", "trained_llm"}
+    assert set(payload["tracks"].keys()) == expected_tracks
+
+    for tid, track in payload["tracks"].items():
+        assert "label" in track and "available" in track and "rollouts" in track, tid
+        if not track["available"]:
+            # `trained_llm` is allowed to be empty in a fresh CPU-only checkout —
+            # it gets populated by Colab notebook §6c.
+            continue
+        assert track["rollouts"], f"track {tid} marked available but has no rollouts"
+        for seed_key, rec in track["rollouts"].items():
+            assert seed_key.isdigit(), f"{tid} seed key not numeric: {seed_key}"
+            assert isinstance(rec["modes"], list)
+            assert len(rec["modes"]) == payload["max_ticks"], (
+                f"{tid}/{seed_key} has {len(rec['modes'])} modes, expected {payload['max_ticks']}"
+            )
+            for m in rec["modes"]:
+                assert m in MODES, f"{tid}/{seed_key} contains unknown mode {m!r}"
+            assert isinstance(rec["cumulative_reward"], (int, float))

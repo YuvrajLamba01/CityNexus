@@ -1,6 +1,27 @@
+# OpenEnv environment manifest for CITYNEXUS.
+# Validate locally with: openenv validate .
 spec_version: 1
 name: citynexus_env
 type: space
 runtime: fastapi
 app: server.app:app
 port: 8000
+description: >
+  Self-evolving multi-agent urban simulation. Five role agents (Delivery,
+  Traffic, Emergency, Police, Planner) act under an adversarial curriculum
+  whose pressure point shifts toward whichever failure mode the agents are
+  weakest at. Verifier-gated, role-attributed rewards make the Planner
+  trainable end-to-end with TRL GRPO + Unsloth on a single Colab T4.
+license: mit
+authors:
+  - Yuvraj Lamba
+repository: https://github.com/YuvrajLamba01/CityNexus
+tags:
+  - multi-agent
+  - reinforcement-learning
+  - rl
+  - trl
+  - unsloth
+  - grpo
+  - simulation
+  - openenv-2026

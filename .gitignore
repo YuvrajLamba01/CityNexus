@@ -35,12 +35,13 @@ Thumbs.db
 # inside an ignored directory, so listing the directory contents lets the
 # `!runs/<file>` negations actually take effect.
 runs/*
-!runs/README.md
 !runs/training_curves.png
 !runs/baseline_vs_trained.png
+!runs/curriculum_failure_modes.png
 !runs/grpo_reward.png
 !runs/llm_vs_random.png
 !runs/training.jsonl
+!runs/llm_rollouts.json
 
 # --- Model artifacts -----------------------------------------------------
 *.pt

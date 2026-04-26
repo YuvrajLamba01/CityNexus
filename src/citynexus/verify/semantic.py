@@ -1,9 +1,10 @@
 """Layer 3 — semantic checks (optional).
 
-The base `SemanticCheck` is intended to be overridden with an LLM judge for
+The base `SemanticCheck` is intended to be overridden with an LLM evaluator for
 richer evaluation. The two concrete classes below are rule-based heuristics
-that approximate what a judge would assess; they're enabled by default so the
-layer isn't dead, but a user can swap them for an `LLMJudgeCheck` at any time.
+that approximate what a semantic evaluator would assess; they're enabled by
+default so the layer isn't dead, but a user can swap them for an
+`LLMEvaluatorCheck` at any time.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ class SemanticCheck(Check):
     """Base for the optional semantic layer. Default = SKIP (so it doesn't gate rewards).
 
     To enable, subclass and implement `evaluate`, or use one of the rule-based
-    concrete classes below. To plug in an LLM judge, subclass and call your
+    concrete classes below. To plug in an LLM evaluator, subclass and call your
     LLM client inside `evaluate`.
     """
 

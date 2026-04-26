@@ -165,6 +165,56 @@
       </div>
     </section>
 
+    <!-- ============== TRAINED-MODEL PLAYBACK ============== -->
+    <section class="playback-panel" id="playback-panel" data-state="idle">
+      <div class="playback-header">
+        <div class="playback-title">
+          <span class="playback-tag">RL evidence</span>
+          <h2>Trained model playback</h2>
+        </div>
+        <p class="playback-sub">
+          Watch the GRPO-trained Qwen-2.5-0.5B Planner's actual mode choices replay
+          tick-by-tick on the live city, on the same held-out seeds the README's
+          headline metrics measure. Compare against random and the heuristic
+          expert (the GRPO training target) to see what the LLM actually learned.
+          The current track is colored on the left edge while playing.
+        </p>
+      </div>
+
+      <div class="playback-grid">
+        <label class="playback-control">
+          <span class="control-label">Track</span>
+          <select id="pb-track" class="pb-select"></select>
+          <span class="control-hint" id="pb-track-hint">choose a recorded policy</span>
+        </label>
+
+        <label class="playback-control">
+          <span class="control-label">Seed</span>
+          <select id="pb-seed" class="pb-select"></select>
+          <span class="control-hint">held-out evaluation seeds 3000–3009</span>
+        </label>
+
+        <div class="playback-control playback-actions">
+          <button id="pb-play" class="btn primary" disabled>Play recorded policy</button>
+          <button id="pb-stop" class="btn ghost" disabled>Stop</button>
+        </div>
+
+        <div class="playback-control playback-status">
+          <div class="pb-status-line">
+            <span class="pb-pill" id="pb-status">idle</span>
+            <span class="pb-pill" id="pb-mode">mode: —</span>
+            <span class="pb-pill" id="pb-tick">tick 0/0</span>
+            <span class="pb-pill" id="pb-reward">env reward 0.00</span>
+          </div>
+          <div class="pb-bar"><div class="pb-bar-fill" id="pb-bar-fill"></div></div>
+        </div>
+      </div>
+
+      <p class="pb-summary" id="pb-summary">
+        Loading recorded rollouts from <code>data/llm_rollouts.json</code>…
+      </p>
+    </section>
+
     <!-- ============== AGENT CARDS WITH SPARKLINES ============== -->
     <section class="agent-cards">
       <div class="agent-card" data-role="delivery">
@@ -400,5 +450,6 @@
   <script src="js/sim.js"></script>
   <script src="js/render.js"></script>
   <script src="js/main.js"></script>
+  <script src="js/playback.js"></script>
 </body>
 </html>
