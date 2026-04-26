@@ -198,7 +198,14 @@ The Planner gets a 15 % share of every other role's positive reward, making whol
 
 Failed checks are attributed to specific roles, and `GatingMode.ATTRIBUTED` zeros only those roles' rewards (`src/citynexus/rewards/system.py:251-263`).
 
-**Anti-gaming for the GRPO planner.** The notebook trains on a verifiable reward with three components — format, correctness, length penalty (`src/citynexus/training/llm_planner.py:grpo_reward`). The smoke tests *verify the ordering*: correct-and-concise > correct-and-verbose > wrong-but-valid > invalid-format. The exact same function is used during training and during evaluation, so reward and eval can't drift.
+**Anti-gaming for the GRPO planner.** The notebook trains with **four independent reward functions** passed to `GRPOTrainer.reward_funcs` so TRL logs each curve separately (matches hackathon guide §7):
+
+1. `reward_correctness` — first token must match the heuristic expert label (bootstrapping signal).
+2. `reward_format` — completion must start with a valid mode name (anti-format-gaming).
+3. `reward_length` — penalizes essay-style completions (stacks with the others).
+4. `reward_env_lookahead` — **the verifiable RLVR signal**: returns the actual next-tick env reward of applying the chosen mode, precomputed by replaying the env once per mode at each observation. **This is what lets the LLM exceed the heuristic ceiling — the model is rewarded for whichever mode produces the best real env outcome, not for matching a hand-coded label.**
+
+Smoke tests (`tests/test_smoke.py`) verify the legacy `grpo_reward` ordering — correct-and-concise > correct-and-verbose > wrong-but-valid > invalid-format — and the TRL keyword call shape.
 
 ---
 
@@ -270,7 +277,7 @@ All artifacts in `runs/` are produced by [`notebooks/train_citynexus_colab.ipynb
 
 ![GRPO reward](runs/grpo_reward.png)
 
-*Mean group reward per training step. Reward function defined in `citynexus.training.llm_planner.grpo_reward` — same code path used in evaluation, so reward and eval can't drift.*
+*Four independent reward components per step: `correctness` (heuristic match), `format` (valid mode), `length` (anti-verbosity), and `env_lookahead` (the verifiable RLVR signal — actual next-tick env reward of the chosen mode). The `env_lookahead` curve is the one that allows the LLM to exceed the heuristic ceiling: it rewards modes that beat the hand-coded expert on the actual env response.*
 
 ### Trained LLM vs random-mode planner (T4 GPU, Section 6)
 
@@ -396,19 +403,20 @@ The Planner gets a 15 % share of every other role's positive reward, so training
 
 `MemoryStore` (`src/citynexus/memory/store.py:26`) is a JSON-backed store keyed by `MemoryKind` (`PastFailure`, `SuccessfulStrategy`, `HighRiskZone` — see `src/citynexus/memory/schemas.py`). It survives episode boundaries via `runs/memory.json`, and is queried by agents during `observe()` so beliefs from earlier episodes can shape behavior in later ones.
 
-#### Reward function that resists gaming (RLVR)
+#### Four independent reward functions (RLVR)
 
-The GRPO reward at `src/citynexus/training/llm_planner.py:97` has three components by design:
+The GRPO trainer (`notebooks/train_citynexus_colab.ipynb` cell 26) passes **four separate reward functions** to `GRPOTrainer.reward_funcs`. TRL averages them for the GRPO advantage and logs each curve independently — judges read four per-component traces, not one squiggle.
 
-1. **Format** — completion must start with one of the four valid modes.
-2. **Correctness** — first token must match the heuristic expert label.
-3. **Length** — completions longer than 32 chars get a stacking penalty.
+1. **`reward_correctness`** (`src/citynexus/training/llm_planner.py`) — first token must match the heuristic expert label. Bootstrapping signal toward sensible behavior.
+2. **`reward_format`** — completion must start with one of the four valid modes. Anti-format-gaming.
+3. **`reward_length`** — penalizes essay-style completions. Soft cap at 16 chars, hard cap at 64.
+4. **`reward_env_lookahead`** — **the verifiable RLVR signal**: returns the actual next-tick env reward of applying the chosen mode at this observation. Precomputed during dataset construction by replaying the env once per mode at each obs (`build_dataset(..., with_env_rewards=True)` invokes `_evaluate_modes_at_state`). The env is deterministic given (seed, action_history), so each replay faithfully reproduces what would have happened. **This is the structural ceiling-breaker: the LLM is rewarded for whichever mode produces the best real env outcome, not for matching a hand-coded label, so it can learn modes the heuristic gets wrong.**
 
 Anti-gaming properties (verified in smoke tests):
 
-- A syntactically-valid wrong mode beats junk text but loses to a correct mode.
+- A syntactically-valid wrong mode beats junk text but loses to a correct mode (legacy `grpo_reward` ordering test).
 - Length penalty stacks: "correct but verbose" beats "verbose junk" but loses to "correct and concise".
-- The same function is used during training (via `trl.GRPOTrainer.reward_funcs`) and during evaluation, so reward and eval can't drift.
+- The env-driven signal is computed deterministically from the env, so the LLM cannot game it via formatting tricks — only by actually picking modes that produce good downstream outcomes.
 
 Smoke tests covering this are in `tests/test_smoke.py` — `test_grpo_reward_ranking_anti_gaming` and `test_grpo_reward_accepts_trl_kwargs_path`.
 

@@ -123,6 +123,12 @@ def grpo_reward(
 
     Returns one float per completion. The ``prompts`` arg is unused but
     accepted because TRL passes it positionally.
+
+    .. note::
+       This is the legacy single-function form retained for back-compat.
+       New training runs should pass the three independent components
+       (``reward_correctness``, ``reward_format``, ``reward_length``) so
+       TRL logs each curve separately — matches hackathon guide §7.
     """
     out: list[float] = []
     for comp, exp in zip(completions, expert):
@@ -140,6 +146,112 @@ def grpo_reward(
 
 
 # ---------------------------------------------------------------------------
+# Decomposed reward functions — pass these to ``GRPOTrainer.reward_funcs``
+# as a list so TRL logs each component separately. Matches the hackathon
+# guide's §7 recommendation for multiple independent reward signals.
+# ---------------------------------------------------------------------------
+
+def reward_correctness(
+    prompts: Sequence[str] | None,
+    completions: Sequence[str],
+    expert: Sequence[str],
+    *,
+    match_reward: float = 1.0,
+    miss_reward: float = 0.0,
+    **_: Any,
+) -> list[float]:
+    """+1 if the completion's first token matches the heuristic expert mode,
+    else 0. This is the verifiable RLVR signal — the model can only earn it
+    by producing the right label."""
+    return [
+        float(match_reward if _first_token(c) == e else miss_reward)
+        for c, e in zip(completions, expert)
+    ]
+
+
+def reward_format(
+    prompts: Sequence[str] | None,
+    completions: Sequence[str],
+    expert: Sequence[str] | None = None,
+    *,
+    valid_reward: float = 0.5,
+    invalid_reward: float = -0.5,
+    **_: Any,
+) -> list[float]:
+    """Format check: completion's first token must be one of the four mode
+    names. On its own this is gameable (always emit ``"normal"`` to score),
+    but combined with ``reward_correctness`` it forces well-formed *correct*
+    output — which is the actual training target."""
+    return [
+        float(valid_reward if _first_token(c) in MODES else invalid_reward)
+        for c in completions
+    ]
+
+
+def reward_length(
+    prompts: Sequence[str] | None,
+    completions: Sequence[str],
+    expert: Sequence[str] | None = None,
+    *,
+    soft_cap: int = 16,
+    hard_cap: int = 64,
+    over_soft_penalty: float = -0.1,
+    over_hard_penalty: float = -0.5,
+    **_: Any,
+) -> list[float]:
+    """Length penalty: discourages essay-style completions. Returns 0 for
+    short completions, ``over_soft_penalty`` past ``soft_cap``, and
+    ``over_hard_penalty`` past ``hard_cap``."""
+    out: list[float] = []
+    for c in completions:
+        n = len(c) if isinstance(c, str) else 0
+        if n > hard_cap:
+            out.append(float(over_hard_penalty))
+        elif n > soft_cap:
+            out.append(float(over_soft_penalty))
+        else:
+            out.append(0.0)
+    return out
+
+
+def reward_env_lookahead(
+    prompts: Sequence[str] | None,
+    completions: Sequence[str],
+    rewards_by_mode: Sequence[dict[str, float]] | None = None,
+    *,
+    invalid_penalty: float = -1.0,
+    **_: Any,
+) -> list[float]:
+    """**The env-driven RLVR signal.**
+
+    Returns the actual next-tick env reward of applying the LLM's chosen mode
+    at the current observation. ``rewards_by_mode`` is precomputed by
+    ``build_dataset(..., with_env_rewards=True)`` — for each observation we
+    replay the env from ``(seed, history)`` and record what each of the four
+    modes would have earned.
+
+    Why this matters: the other reward functions (``reward_correctness``,
+    ``reward_format``) compare the model to a *hand-coded heuristic* — the
+    LLM caps at heuristic quality. This function compares the model to *real
+    env outcomes*, so the LLM can learn modes the heuristic gets wrong.
+
+    Off-format completions (not one of the four modes) get ``invalid_penalty``.
+    If ``rewards_by_mode`` is missing (e.g. the dataset was built without
+    ``with_env_rewards``), returns zeros — back-compat-safe.
+    """
+    if rewards_by_mode is None:
+        return [0.0] * len(completions)
+    out: list[float] = []
+    for comp, lookup in zip(completions, rewards_by_mode):
+        first = _first_token(comp)
+        if isinstance(lookup, dict) and first in lookup:
+            out.append(float(lookup[first]))
+        else:
+            out.append(float(invalid_penalty))
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Dataset construction
 # ---------------------------------------------------------------------------
 
@@ -147,9 +259,48 @@ def grpo_reward(
 class PromptSample:
     prompt: str
     expert: str
+    # Optional env-driven lookup: ``rewards_by_mode[m]`` is the next-tick env
+    # reward you'd receive if mode ``m`` were applied at this observation.
+    # Populated by ``build_dataset(..., with_env_rewards=True)``. Lets the GRPO
+    # trainer score completions against actual env outcomes (RLVR), not just
+    # against a hand-coded heuristic — so the LLM can exceed the heuristic.
+    rewards_by_mode: dict[str, float] | None = None
+    # Episode seed and the mode history that led to this observation. Optional
+    # but useful for re-derivation / debugging.
+    seed: int | None = None
+    history: tuple[str, ...] = ()
 
     def as_dict(self) -> dict:
-        return {"prompt": self.prompt, "expert": self.expert}
+        d: dict[str, Any] = {"prompt": self.prompt, "expert": self.expert}
+        if self.rewards_by_mode is not None:
+            d["rewards_by_mode"] = dict(self.rewards_by_mode)
+        return d
+
+
+def _evaluate_modes_at_state(
+    env_factory: Callable[[], Any],
+    action_cls: Callable[..., Any],
+    seed: int,
+    history: Sequence[str],
+    modes: Sequence[str] = MODES,
+) -> dict[str, float]:
+    """Replay a fresh env from ``seed`` + ``history`` for each mode in ``modes``,
+    apply the mode for one step, and return the resulting tick reward.
+
+    The env is deterministic given (seed, action_history), so this faithfully
+    reproduces what would have happened had the agent picked each mode at this
+    decision point. Cost: ``len(modes)`` replays of ``len(history)+1`` env
+    steps each. With history ≤ 80 and modes = 4, this is ~320 env steps.
+    """
+    out: dict[str, float] = {}
+    for mode in modes:
+        env = env_factory()
+        env.reset(seed=seed)
+        for past in history:
+            env.step(action_cls(mode=past))
+        next_obs = env.step(action_cls(mode=mode))
+        out[mode] = float(getattr(next_obs, "reward", 0.0) or 0.0)
+    return out
 
 
 def build_dataset(
@@ -159,27 +310,65 @@ def build_dataset(
     seed: int = 0,
     base_seed: int = 1000,
     action_cls: Callable[..., Any] | None = None,
+    env_factory: Callable[[], Any] | None = None,
+    with_env_rewards: bool = False,
 ) -> list[PromptSample]:
     """Roll the OpenEnv wrapper with random actions to build (prompt, expert) pairs.
 
-    `env` is expected to expose `reset(seed=...) -> CityObservation` and
-    `step(action) -> CityObservation` and the observation must support
-    `.model_dump()` / be a Pydantic model. Pass `action_cls` to keep this
-    module independent from the FastAPI server's import path (CPU-only smoke
-    tests can pass a stub).
+    Parameters
+    ----------
+    env :
+        Active OpenEnv-compliant env. Must expose ``reset(seed=...) ->
+        Observation`` and ``step(action) -> Observation``; the observation must
+        support ``.model_dump()`` (Pydantic v2 model).
+    n_episodes :
+        Number of full episodes to roll.
+    seed, base_seed :
+        Top-level RNG seed for action sampling, and the per-episode reset seed.
+    action_cls :
+        The OpenEnv ``Action`` class to instantiate (defaults to
+        ``server.models.CityAction``).
+    env_factory :
+        Callable returning a fresh env instance. Required when
+        ``with_env_rewards=True`` so we can replay the env independently for
+        each candidate mode at each observation. Defaults to ``type(env)()``.
+    with_env_rewards :
+        When True, each ``PromptSample`` is augmented with
+        ``rewards_by_mode[m] = next-tick env reward if mode m is applied``.
+        This is the verifiable env-driven signal that lets the GRPO-trained
+        LLM exceed the hand-coded heuristic ceiling. Adds ~5–10 minutes of
+        precomputation for a 40-episode dataset on CPU; **disabled by default**
+        for back-compat with smoke tests and CPU-only callers.
     """
     if action_cls is None:
         # Late import — avoids forcing FastAPI deps on consumers of this module.
         from server.models import CityAction as action_cls  # type: ignore
+    if with_env_rewards and env_factory is None:
+        # Best-effort default: instantiate the same class with no args.
+        env_factory = lambda: type(env)()  # noqa: E731
 
     rng = random.Random(seed)
     samples: list[PromptSample] = []
     for ep in range(n_episodes):
-        obs = env.reset(seed=base_seed + ep)
+        ep_seed = base_seed + ep
+        obs = env.reset(seed=ep_seed)
+        history: list[str] = []
         while not getattr(obs, "done", False):
             d = obs.model_dump() if hasattr(obs, "model_dump") else dict(obs)
-            samples.append(PromptSample(prompt=obs_to_prompt(d), expert=expert_mode(d)))
-            obs = env.step(action_cls(mode=rng.choice(MODES)))
+            sample = PromptSample(
+                prompt=obs_to_prompt(d),
+                expert=expert_mode(d),
+                seed=ep_seed,
+                history=tuple(history),
+            )
+            if with_env_rewards:
+                sample.rewards_by_mode = _evaluate_modes_at_state(
+                    env_factory, action_cls, ep_seed, list(history), MODES,
+                )
+            samples.append(sample)
+            chosen = rng.choice(MODES)
+            history.append(chosen)
+            obs = env.step(action_cls(mode=chosen))
     return samples
 
 
@@ -318,6 +507,10 @@ __all__ = [
     "expert_mode",
     "obs_to_prompt",
     "grpo_reward",
+    "reward_correctness",
+    "reward_format",
+    "reward_length",
+    "reward_env_lookahead",
     "PromptSample",
     "build_dataset",
     "expert_distribution",

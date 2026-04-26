@@ -40,7 +40,11 @@ runs/*
 !runs/curriculum_failure_modes.png
 !runs/grpo_reward.png
 !runs/llm_vs_random.png
+!runs/per_agent_rewards.png
+!runs/heuristic_action_dist.png
+!runs/llm_mode_distribution.png
 !runs/training.jsonl
+!runs/memory.json
 !runs/llm_rollouts.json
 
 # --- Model artifacts -----------------------------------------------------
