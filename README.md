@@ -629,7 +629,7 @@ License: MIT.
 | **OpenEnv server (HF Space, docker)** | ⏳ Deploy after running notebook     | _Add the docker-SDK Space URL here once deployed (use the docker frontmatter block above)._                       |
 | **Static demo (HF Space, static)**    | ⏳ Deploy after running notebook     | _Add the static-SDK Space URL here once deployed (this repo's root README is set up for it)._                   |
 | **Training notebook (Colab) — repo**  | ✓ Ready                             | [`notebooks/train_citynexus_colab.ipynb`](notebooks/train_citynexus_colab.ipynb) — Open in Colab via badge above. Reproducible from a clean runtime. |
-| **Training notebook (Colab) — live trained run** | ✓ Ran on T4              | [Open the trained notebook](https://colab.research.google.com/drive/179O7FMivrhEcj5rgMWqE1ezW-RrRkBCi?usp=sharing) — preserves cell outputs from the actual GRPO run on a Colab T4. |
+| **Training notebook (Colab) — live trained run** | ✓ Ran on T4              | [Open the trained notebook](https://colab.research.google.com/drive/1sJHVtNQIVvzBuynGe6rokwIs8Cf5yJdA?usp=sharing) — preserves cell outputs from the actual GRPO run on a Colab T4. |
 | **Project blog (writeup)**            | ✓ Ready                             | [`Blog.md`](Blog.md) — narrative writeup of the design decisions, training story, and results. Pushed to the HF Space alongside this README. |
 | **Smoke tests**                       | ✓ 10 passing in ~5 s                | `pytest -q`                                                                                                      |
 | **OpenEnv multi-mode validation**     | ✓ Passes all 4 modes                | `openenv validate .` → docker, openenv_serve, uv_run, python_module                                              |

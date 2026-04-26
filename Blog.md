@@ -184,7 +184,7 @@ The repo is hackathon-complete, but here's what I'd build with another week:
 If you want to play with CITYNEXUS, three entry points:
 
 1. **Fastest path to seeing it work**: clone the repo, `pip install -e .`, `pytest -q`. 9 smoke tests cover every layer of the stack.
-2. **See the actual training run**: open the [Colab notebook](https://colab.research.google.com/drive/179O7FMivrhEcj5rgMWqE1ezW-RrRkBCi?usp=sharing) — the cell outputs are preserved from the T4 run that produced the numbers above.
+2. **See the actual training run**: open the [Colab notebook](https://colab.research.google.com/drive/1sJHVtNQIVvzBuynGe6rokwIs8Cf5yJdA?usp=sharing) — the cell outputs are preserved from the T4 run that produced the numbers above.
 3. **Play with it in the browser**: the static demo (`web/index.html`) runs the simulation client-side with live charts, agent message stream, and persistent memory in `localStorage`. The Trained Model Playback panel underneath the live city lets you watch the GRPO-trained policy's actual mode choices animate the same held-out seeds. No install needed.
 
 The full architecture deep-dive with file:line citations into every claim is in the repository's `README.md`.
