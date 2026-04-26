@@ -219,12 +219,13 @@ def reward_env_lookahead(
     completions: Sequence[str],
     rewards_by_mode: Sequence[dict[str, float]] | None = None,
     *,
+    scale: float = 5.0,
     invalid_penalty: float = -1.0,
     **_: Any,
 ) -> list[float]:
     """**The env-driven RLVR signal.**
 
-    Returns the actual next-tick env reward of applying the LLM's chosen mode
+    Returns ``scale × actual_next_tick_env_reward`` of the LLM's chosen mode
     at the current observation. ``rewards_by_mode`` is precomputed by
     ``build_dataset(..., with_env_rewards=True)`` — for each observation we
     replay the env from ``(seed, history)`` and record what each of the four
@@ -235,9 +236,18 @@ def reward_env_lookahead(
     LLM caps at heuristic quality. This function compares the model to *real
     env outcomes*, so the LLM can learn modes the heuristic gets wrong.
 
-    Off-format completions (not one of the four modes) get ``invalid_penalty``.
-    If ``rewards_by_mode`` is missing (e.g. the dataset was built without
-    ``with_env_rewards``), returns zeros — back-compat-safe.
+    **Why scale=5.0 by default:** raw next-tick env rewards typically sit in
+    [-0.1, +0.4] for most observations, while ``reward_correctness`` returns
+    {0, +1}. Without scaling, the heuristic-match signal would dominate the
+    GRPO group advantage and the LLM would be pulled toward the heuristic
+    even when env-best disagrees. Multiplying by 5 puts ``env_lookahead`` in
+    [-0.5, +2.0] range, comparable in magnitude to ``reward_correctness`` and
+    able to flip the within-group ranking when heuristic and env-best differ.
+
+    Off-format completions (not one of the four modes) get
+    ``scale * invalid_penalty``. If ``rewards_by_mode`` is missing (e.g.
+    the dataset was built without ``with_env_rewards``), returns zeros —
+    back-compat-safe.
     """
     if rewards_by_mode is None:
         return [0.0] * len(completions)
@@ -245,9 +255,9 @@ def reward_env_lookahead(
     for comp, lookup in zip(completions, rewards_by_mode):
         first = _first_token(comp)
         if isinstance(lookup, dict) and first in lookup:
-            out.append(float(lookup[first]))
+            out.append(scale * float(lookup[first]))
         else:
-            out.append(float(invalid_penalty))
+            out.append(scale * float(invalid_penalty))
     return out
 
 
