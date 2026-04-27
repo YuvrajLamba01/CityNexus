@@ -186,7 +186,7 @@ If you want to play with CITYNEXUS, three entry points:
 1. **Fastest path to seeing it work**: clone the repo, `pip install -e .`, `pytest -q`. 9 smoke tests cover every layer of the stack.
 2. **See the actual training run**: open the [Colab notebook](https://colab.research.google.com/drive/1sJHVtNQIVvzBuynGe6rokwIs8Cf5yJdA?usp=sharing) — the cell outputs are preserved from the T4 run that produced the numbers above.
 3. **Play with it in the browser**: the static demo (`web/index.html`) runs the simulation client-side with live charts, agent message stream, and persistent memory in `localStorage`. The Trained Model Playback panel underneath the live city lets you watch the GRPO-trained policy's actual mode choices animate the same held-out seeds. No install needed.
-4. **Open the hosted Space**: visit the [Hugging Face Space](https://huggingface.co/spaces/yuvraaj23/CityNexus) for the deployed browser demo and playback experience.
+4. **Open the hosted Space**: visit the [live app](https://yuvraaj23-citynexus.hf.space) for the deployed browser demo and playback experience.
 
 The full architecture deep-dive with file:line citations into every claim is in the repository's `README.md`.
 
