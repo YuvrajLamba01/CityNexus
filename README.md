@@ -14,7 +14,7 @@ short_description: Self-evolving multi-agent urban simulation
 
 **OpenEnv Hackathon 2026 — Multi-Agent Interactions × Self-Improvement**
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/YuvrajLamba01/CityNexus/blob/main/notebooks/train_citynexus_colab.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1sJHVtNQIVvzBuynGe6rokwIs8Cf5yJdA?usp=sharing)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![OpenEnv: validated](https://img.shields.io/badge/openenv%20validate-multi--mode%20OK-brightgreen)](#openenv-compliance)
